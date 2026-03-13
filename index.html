@@ -1,0 +1,528 @@
+import { useState, useEffect } from "react";
+
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const SERVICES = [
+  { id: 1, name: "Lavagem Simples", price: 25, duration: 30, icon: "💧", color: "#3b82f6" },
+  { id: 2, name: "Lavagem Completa", price: 50, duration: 60, icon: "🫧", color: "#06b6d4" },
+  { id: 3, name: "Polimento", price: 120, duration: 180, icon: "✨", color: "#8b5cf6" },
+  { id: 4, name: "Higienização", price: 180, duration: 240, icon: "🧼", color: "#10b981" },
+  { id: 5, name: "Detailing Premium", price: 350, duration: 480, icon: "🏆", color: "#f59e0b" },
+];
+
+const SLOTS = ["08:00","09:00","10:00","11:00","13:00","14:00","15:00","16:00","17:00"];
+
+const INIT_BOOKINGS = [
+  { id: 1, service: "Lavagem Completa", price: 50, date: "2025-06-10", time: "09:00", plate: "AB-12-CD", model: "BMW Série 3", status: "concluido", payment: "pago" },
+  { id: 2, service: "Polimento", price: 120, date: "2025-06-11", time: "10:00", plate: "XY-98-ZW", model: "Audi A4", status: "pendente", payment: "pendente" },
+  { id: 3, service: "Detailing Premium", price: 350, date: "2025-06-12", time: "08:00", plate: "LM-55-NP", model: "Mercedes C200", status: "em_curso", payment: "pago" },
+];
+
+// ─── MAIN APP ────────────────────────────────────────────────────────────────
+export default function AquaWash() {
+  const [tab, setTab] = useState("home");
+  const [bookings, setBookings] = useState(INIT_BOOKINGS);
+  const [userBookings, setUserBookings] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [adminError, setAdminError] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  const showNotif = (msg, type = "success") => {
+    setNotification({ msg, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const addBooking = (booking) => {
+    const newB = { ...booking, id: Date.now(), status: "pendente", payment: "pendente" };
+    setBookings(prev => [newB, ...prev]);
+    setUserBookings(prev => [newB, ...prev]);
+    showNotif("Agendamento confirmado! 🎉");
+  };
+
+  const updateStatus = (id, status) => {
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+    showNotif("Estado atualizado ✓");
+  };
+
+  const updatePayment = (id, payment) => {
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, payment } : b));
+    showNotif("Pagamento registado ✓");
+  };
+
+  const revenue = bookings.filter(b => b.payment === "pago").reduce((s, b) => s + b.price, 0);
+
+  return (
+    <div style={S.app}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        input, button, select { font-family: 'DM Sans', sans-serif; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        @keyframes notifIn { from { transform: translateY(-60px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+      `}</style>
+
+      {/* Notification */}
+      {notification && (
+        <div style={{ ...S.notif, background: notification.type === "success" ? "#10b981" : "#ef4444", animation: "notifIn 0.3s ease" }}>
+          {notification.msg}
+        </div>
+      )}
+
+      {/* Screen */}
+      <div style={S.screen}>
+        {tab === "home" && <HomeScreen setTab={setTab} bookings={userBookings} />}
+        {tab === "book" && <BookScreen addBooking={addBooking} setTab={setTab} />}
+        {tab === "bookings" && <BookingsScreen bookings={userBookings} />}
+        {tab === "admin" && !isAdmin && <AdminLogin setIsAdmin={setIsAdmin} pin={adminPin} setPin={setAdminPin} error={adminError} setError={setAdminError} />}
+        {tab === "admin" && isAdmin && <AdminPanel bookings={bookings} revenue={revenue} updateStatus={updateStatus} updatePayment={updatePayment} />}
+      </div>
+
+      {/* Bottom Nav */}
+      <nav style={S.nav}>
+        {[
+          { id: "home", icon: "⊙", label: "Início" },
+          { id: "book", icon: "＋", label: "Agendar" },
+          { id: "bookings", icon: "◷", label: "Os Meus" },
+          { id: "admin", icon: "⚙", label: "Admin" },
+        ].map(n => (
+          <button key={n.id} style={{ ...S.navBtn, ...(tab === n.id ? S.navBtnActive : {}) }} onClick={() => setTab(n.id)}>
+            <span style={{ fontSize: 20 }}>{n.icon}</span>
+            <span style={{ fontSize: 10, letterSpacing: 0.5 }}>{n.label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+// ─── HOME ────────────────────────────────────────────────────────────────────
+function HomeScreen({ setTab, bookings }) {
+  return (
+    <div style={S.page}>
+      {/* Hero */}
+      <div style={S.hero}>
+        <div style={S.heroGlow} />
+        <p style={S.heroEye}>LAVAGEM PREMIUM</p>
+        <h1 style={S.heroTitle}>Aqua<span style={{ color: "#38bdf8" }}>Wash</span></h1>
+        <p style={S.heroSub}>O seu carro merece o melhor cuidado</p>
+        <button style={S.heroBtn} onClick={() => setTab("book")}>Agendar Agora →</button>
+      </div>
+
+      {/* Stats */}
+      <div style={S.statsRow}>
+        {[["2.4k+", "Clientes"], ["5★", "Avaliação"], ["8", "Serviços"]].map(([v, l]) => (
+          <div key={l} style={S.statBox}>
+            <div style={S.statVal}>{v}</div>
+            <div style={S.statLabel}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Services Preview */}
+      <div style={S.section}>
+        <div style={S.sectionHeader}>
+          <span style={S.sectionTitle}>Serviços</span>
+          <button style={S.seeAll} onClick={() => setTab("book")}>Ver todos</button>
+        </div>
+        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+          {SERVICES.slice(0, 4).map(s => (
+            <div key={s.id} style={{ ...S.serviceChip, borderColor: s.color + "44" }}>
+              <span style={{ fontSize: 22 }}>{s.icon}</span>
+              <span style={S.chipName}>{s.name.split(" ")[0]}</span>
+              <span style={{ ...S.chipPrice, color: s.color }}>€{s.price}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent bookings */}
+      {bookings.length > 0 && (
+        <div style={S.section}>
+          <div style={S.sectionHeader}>
+            <span style={S.sectionTitle}>Recentes</span>
+          </div>
+          {bookings.slice(0, 2).map(b => (
+            <BookingCard key={b.id} b={b} />
+          ))}
+        </div>
+      )}
+
+      {/* Promo */}
+      <div style={S.promo}>
+        <div>
+          <p style={{ color: "#fbbf24", fontSize: 11, letterSpacing: 2, marginBottom: 4 }}>PROMOÇÃO</p>
+          <p style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>10% de desconto</p>
+          <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Na primeira lavagem</p>
+        </div>
+        <span style={{ fontSize: 40 }}>🚗</span>
+      </div>
+
+      <div style={{ height: 20 }} />
+    </div>
+  );
+}
+
+// ─── BOOK ────────────────────────────────────────────────────────────────────
+function BookScreen({ addBooking, setTab }) {
+  const [step, setStep] = useState(0);
+  const [svcId, setSvcId] = useState(null);
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [plate, setPlate] = useState("");
+  const [model, setModel] = useState("");
+  const [payMethod, setPayMethod] = useState("mbway");
+  const [paying, setPaying] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const svc = SERVICES.find(s => s.id === svcId);
+  const today = new Date().toISOString().split("T")[0];
+
+  const canNext = [
+    svcId !== null,
+    date && time,
+    plate.length >= 7 && model.length >= 2,
+    true
+  ][step];
+
+  const handleConfirm = () => {
+    setPaying(true);
+    setTimeout(() => {
+      setPaying(false);
+      setDone(true);
+      addBooking({ service: svc.name, price: svc.price, date, time, plate, model });
+    }, 2000);
+  };
+
+  if (done) return (
+    <div style={{ ...S.page, alignItems: "center", justifyContent: "center", display: "flex", flexDirection: "column" }}>
+      <div style={S.doneCircle}>✓</div>
+      <h2 style={{ color: "#fff", fontSize: 22, fontFamily: "Syne", marginBottom: 8 }}>Agendado!</h2>
+      <p style={{ color: "rgba(255,255,255,0.5)", marginBottom: 32, textAlign: "center" }}>
+        {svc?.name} • {date} às {time}
+      </p>
+      <button style={S.heroBtn} onClick={() => { setDone(false); setStep(0); setSvcId(null); setDate(""); setTime(""); setPlate(""); setModel(""); setTab("bookings"); }}>
+        Ver Agendamentos
+      </button>
+    </div>
+  );
+
+  const stepLabels = ["Serviço", "Quando", "Carro", "Pagamento"];
+
+  return (
+    <div style={S.page}>
+      <h2 style={S.pageTitle}>Novo Agendamento</h2>
+
+      {/* Progress */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+        {stepLabels.map((l, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center" }}>
+            <div style={{ height: 3, borderRadius: 2, background: i <= step ? "#38bdf8" : "rgba(255,255,255,0.1)", marginBottom: 4, transition: "background 0.3s" }} />
+            <span style={{ fontSize: 9, color: i === step ? "#38bdf8" : "rgba(255,255,255,0.3)", letterSpacing: 0.5 }}>{l.toUpperCase()}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ animation: "slideUp 0.3s ease", flex: 1 }}>
+        {step === 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {SERVICES.map(s => (
+              <div key={s.id} style={{ ...S.svcRow, borderColor: svcId === s.id ? s.color : "rgba(255,255,255,0.07)" }}
+                onClick={() => setSvcId(s.id)}>
+                <span style={{ fontSize: 26 }}>{s.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>⏱ {s.duration < 60 ? s.duration + " min" : Math.round(s.duration / 60) + "h"}</div>
+                </div>
+                <div style={{ color: s.color, fontWeight: 700, fontSize: 15 }}>€{s.price}</div>
+                {svcId === s.id && <div style={{ ...S.dot, background: s.color }}>✓</div>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {step === 1 && (
+          <div>
+            <Label>Data</Label>
+            <input type="date" min={today} value={date} onChange={e => { setDate(e.target.value); setTime(""); }} style={S.input} />
+            {date && <>
+              <Label>Horário</Label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                {SLOTS.map(t => (
+                  <button key={t} style={{ ...S.timeBtn, ...(time === t ? S.timeBtnOn : {}) }} onClick={() => setTime(t)}>{t}</button>
+                ))}
+              </div>
+            </>}
+          </div>
+        )}
+
+        {step === 2 && (
+          <div>
+            <Label>Matrícula</Label>
+            <input placeholder="AB-12-CD" value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} maxLength={8} style={S.input} />
+            <Label>Modelo</Label>
+            <input placeholder="Ex: BMW Série 3" value={model} onChange={e => setModel(e.target.value)} style={S.input} />
+          </div>
+        )}
+
+        {step === 3 && (
+          <div>
+            {/* Summary */}
+            <div style={S.summaryBox}>
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 12, letterSpacing: 1 }}>RESUMO</div>
+              {[["Serviço", `${svc?.icon} ${svc?.name}`], ["Data", date], ["Hora", time], ["Veículo", model], ["Matrícula", plate]].map(([k, v]) => (
+                <div key={k} style={S.sumRow}><span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>{k}</span><span style={{ color: "#fff", fontSize: 13 }}>{v}</span></div>
+              ))}
+              <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "10px 0" }} />
+              <div style={S.sumRow}><span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>Total</span><span style={{ color: "#38bdf8", fontWeight: 700, fontSize: 18 }}>€{svc?.price}</span></div>
+            </div>
+
+            {/* Payment */}
+            <Label>Método de Pagamento</Label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[["mbway", "📱", "MB Way"], ["card", "💳", "Cartão"], ["cash", "💵", "Dinheiro"]].map(([id, ic, lb]) => (
+                <div key={id} style={{ ...S.payOpt, borderColor: payMethod === id ? "#38bdf8" : "rgba(255,255,255,0.07)" }} onClick={() => setPayMethod(id)}>
+                  <span style={{ fontSize: 20 }}>{ic}</span>
+                  <span style={{ color: "#fff", fontSize: 14 }}>{lb}</span>
+                  {payMethod === id && <span style={{ marginLeft: "auto", color: "#38bdf8" }}>●</span>}
+                </div>
+              ))}
+            </div>
+
+            {paying ? (
+              <div style={S.payingBox}>
+                <div style={{ animation: "pulse 1s infinite", fontSize: 32, marginBottom: 12 }}>⏳</div>
+                <p style={{ color: "#fff" }}>A processar pagamento...</p>
+              </div>
+            ) : (
+              <button style={{ ...S.heroBtn, width: "100%", marginTop: 20 }} onClick={handleConfirm}>
+                Confirmar e Pagar €{svc?.price}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Nav buttons */}
+      {step < 3 && (
+        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+          {step > 0 && <button style={S.backBtn} onClick={() => setStep(s => s - 1)}>← Voltar</button>}
+          <button style={{ ...S.heroBtn, flex: 1, opacity: canNext ? 1 : 0.35 }} disabled={!canNext} onClick={() => setStep(s => s + 1)}>
+            Próximo →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MY BOOKINGS ─────────────────────────────────────────────────────────────
+function BookingsScreen({ bookings }) {
+  return (
+    <div style={S.page}>
+      <h2 style={S.pageTitle}>Os Meus Agendamentos</h2>
+      {bookings.length === 0 ? (
+        <div style={{ textAlign: "center", marginTop: 80 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🚗</div>
+          <p style={{ color: "rgba(255,255,255,0.4)" }}>Sem agendamentos ainda</p>
+        </div>
+      ) : (
+        bookings.map(b => <BookingCard key={b.id} b={b} />)
+      )}
+    </div>
+  );
+}
+
+// ─── ADMIN LOGIN ─────────────────────────────────────────────────────────────
+function AdminLogin({ setIsAdmin, pin, setPin, error, setError }) {
+  const check = () => {
+    if (pin === "1234") { setIsAdmin(true); setError(false); }
+    else { setError(true); setPin(""); }
+  };
+  return (
+    <div style={{ ...S.page, alignItems: "center", justifyContent: "center", display: "flex", flexDirection: "column" }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
+      <h2 style={{ color: "#fff", fontFamily: "Syne", marginBottom: 8 }}>Área Admin</h2>
+      <p style={{ color: "rgba(255,255,255,0.4)", marginBottom: 32, fontSize: 13 }}>PIN: 1234</p>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{ width: 14, height: 14, borderRadius: "50%", background: i < pin.length ? "#38bdf8" : "rgba(255,255,255,0.15)", transition: "background 0.2s" }} />
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, width: 220, marginBottom: 16 }}>
+        {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k, i) => (
+          <button key={i} style={{ ...S.pinBtn, opacity: k === "" ? 0 : 1 }} disabled={k === ""} onClick={() => {
+            if (k === "⌫") setPin(p => p.slice(0,-1));
+            else if (pin.length < 4) setPin(p => p + k);
+          }}>{k}</button>
+        ))}
+      </div>
+      {error && <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>PIN incorreto. Tente novamente.</p>}
+      <button style={{ ...S.heroBtn, opacity: pin.length === 4 ? 1 : 0.4 }} disabled={pin.length !== 4} onClick={check}>Entrar</button>
+    </div>
+  );
+}
+
+// ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
+function AdminPanel({ bookings, revenue, updateStatus, updatePayment }) {
+  const [filter, setFilter] = useState("todos");
+  const pending = bookings.filter(b => b.status === "pendente").length;
+  const inProgress = bookings.filter(b => b.status === "em_curso").length;
+  const done = bookings.filter(b => b.status === "concluido").length;
+
+  const filtered = filter === "todos" ? bookings : bookings.filter(b => b.status === filter);
+
+  return (
+    <div style={S.page}>
+      <h2 style={S.pageTitle}>Painel Admin</h2>
+
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+        <KPI label="Receita" value={`€${revenue}`} icon="💰" color="#10b981" />
+        <KPI label="Pendentes" value={pending} icon="⏳" color="#f59e0b" />
+        <KPI label="Em Curso" value={inProgress} icon="🔄" color="#3b82f6" />
+        <KPI label="Concluídos" value={done} icon="✅" color="#8b5cf6" />
+      </div>
+
+      {/* Filter */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" }}>
+        {[["todos","Todos"],["pendente","Pendentes"],["em_curso","Em Curso"],["concluido","Concluídos"]].map(([v,l]) => (
+          <button key={v} style={{ ...S.filterBtn, ...(filter === v ? S.filterBtnOn : {}) }} onClick={() => setFilter(v)}>{l}</button>
+        ))}
+      </div>
+
+      {/* Bookings */}
+      {filtered.map(b => (
+        <AdminCard key={b.id} b={b} updateStatus={updateStatus} updatePayment={updatePayment} />
+      ))}
+    </div>
+  );
+}
+
+function AdminCard({ b, updateStatus, updatePayment }) {
+  const [open, setOpen] = useState(false);
+  const statusColor = { pendente: "#f59e0b", em_curso: "#3b82f6", concluido: "#10b981" }[b.status];
+  const statusLabel = { pendente: "Pendente", em_curso: "Em Curso", concluido: "Concluído" }[b.status];
+
+  return (
+    <div style={{ ...S.adminCard, borderColor: open ? statusColor + "44" : "rgba(255,255,255,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }} onClick={() => setOpen(o => !o)}>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{b.model} · {b.plate}</div>
+          <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 12 }}>{b.service} · {b.date} {b.time}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ color: statusColor, fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{statusLabel}</div>
+          <div style={{ color: "#38bdf8", fontWeight: 700 }}>€{b.price}</div>
+        </div>
+        <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 14, animation: "slideUp 0.2s ease" }}>
+          <div style={{ marginBottom: 12 }}>
+            <Label>Estado do Serviço</Label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[["pendente","Pendente"],["em_curso","Em Curso"],["concluido","Concluído"]].map(([v,l]) => (
+                <button key={v} style={{ ...S.statusBtn, background: b.status === v ? statusColor : "rgba(255,255,255,0.05)", color: b.status === v ? "#fff" : "rgba(255,255,255,0.5)" }}
+                  onClick={() => updateStatus(b.id, v)}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>Pagamento</Label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[["pendente","Pendente"],["pago","Pago"]].map(([v,l]) => (
+                <button key={v} style={{ ...S.statusBtn, background: b.payment === v ? (v === "pago" ? "#10b981" : "#f59e0b") : "rgba(255,255,255,0.05)", color: b.payment === v ? "#fff" : "rgba(255,255,255,0.5)" }}
+                  onClick={() => updatePayment(b.id, v)}>{l}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SHARED COMPONENTS ───────────────────────────────────────────────────────
+function BookingCard({ b }) {
+  const statusColor = { pendente: "#f59e0b", em_curso: "#3b82f6", concluido: "#10b981" }[b.status] || "#888";
+  const statusLabel = { pendente: "Pendente", em_curso: "Em Curso", concluido: "Concluído" }[b.status] || b.status;
+  return (
+    <div style={S.bookCard}>
+      <div style={{ flex: 1 }}>
+        <div style={{ color: "#fff", fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{b.service}</div>
+        <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{b.model} · {b.plate}</div>
+        <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{b.date} às {b.time}</div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ color: statusColor, fontSize: 11, fontWeight: 600, padding: "3px 8px", background: statusColor + "18", borderRadius: 20, marginBottom: 4 }}>{statusLabel}</div>
+        <div style={{ color: "#38bdf8", fontWeight: 700, fontSize: 15 }}>€{b.price}</div>
+      </div>
+    </div>
+  );
+}
+
+function KPI({ label, value, icon, color }) {
+  return (
+    <div style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${color}22`, borderRadius: 14, padding: "14px 16px" }}>
+      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+      <div style={{ color, fontWeight: 800, fontSize: 22, fontFamily: "Syne" }}>{value}</div>
+      <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 1 }}>{label.toUpperCase()}</div>
+    </div>
+  );
+}
+
+function Label({ children }) {
+  return <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", margin: "14px 0 7px" }}>{children}</div>;
+}
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+const S = {
+  app: { width: "100%", maxWidth: 430, margin: "0 auto", height: "100vh", display: "flex", flexDirection: "column", background: "#080d1a", fontFamily: "'DM Sans', sans-serif", position: "relative", overflow: "hidden" },
+  notif: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 100, padding: "14px 20px", color: "#fff", fontWeight: 600, fontSize: 13, textAlign: "center" },
+  screen: { flex: 1, overflowY: "auto", overflowX: "hidden" },
+  nav: { display: "flex", background: "rgba(8,13,26,0.95)", borderTop: "1px solid rgba(255,255,255,0.07)", backdropFilter: "blur(20px)", flexShrink: 0 },
+  navBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "10px 0 8px", background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", transition: "color 0.2s" },
+  navBtnActive: { color: "#38bdf8" },
+  page: { padding: "24px 20px 20px", minHeight: "100%" },
+  pageTitle: { color: "#fff", fontFamily: "Syne", fontSize: 22, fontWeight: 800, marginBottom: 20 },
+  hero: { background: "linear-gradient(135deg, #0c1f3f 0%, #0a192e 100%)", borderRadius: 20, padding: "32px 24px", marginBottom: 16, position: "relative", overflow: "hidden", border: "1px solid rgba(56,189,248,0.15)" },
+  heroGlow: { position: "absolute", width: 200, height: 200, borderRadius: "50%", background: "radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%)", top: -60, right: -60 },
+  heroEye: { color: "#38bdf8", fontSize: 10, letterSpacing: 3, marginBottom: 8 },
+  heroTitle: { color: "#fff", fontSize: 36, fontFamily: "Syne", fontWeight: 800, lineHeight: 1.1, marginBottom: 8 },
+  heroSub: { color: "rgba(255,255,255,0.5)", fontSize: 14, marginBottom: 20 },
+  heroBtn: { background: "linear-gradient(135deg, #0284c7, #38bdf8)", border: "none", borderRadius: 10, padding: "12px 24px", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", letterSpacing: 0.3 },
+  statsRow: { display: "flex", gap: 10, marginBottom: 20 },
+  statBox: { flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "14px 10px", textAlign: "center" },
+  statVal: { color: "#fff", fontFamily: "Syne", fontWeight: 800, fontSize: 18, marginBottom: 2 },
+  statLabel: { color: "rgba(255,255,255,0.35)", fontSize: 11 },
+  section: { marginBottom: 20 },
+  sectionHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  sectionTitle: { color: "#fff", fontFamily: "Syne", fontWeight: 700, fontSize: 16 },
+  seeAll: { background: "none", border: "none", color: "#38bdf8", fontSize: 12, cursor: "pointer" },
+  serviceChip: { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.04)", border: "1px solid", borderRadius: 16, padding: "14px 12px", minWidth: 90 },
+  chipName: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: 500 },
+  chipPrice: { fontSize: 13, fontWeight: 700 },
+  promo: { background: "linear-gradient(135deg, #78350f, #92400e)", borderRadius: 16, padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid rgba(251,191,36,0.2)" },
+  bookCard: { display: "flex", alignItems: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "14px 16px", marginBottom: 10 },
+  svcRow: { display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.04)", border: "1px solid", borderRadius: 14, padding: "14px 16px", cursor: "pointer", transition: "border-color 0.2s", position: "relative" },
+  dot: { width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 },
+  input: { width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "13px 14px", color: "#fff", fontSize: 15, outline: "none" },
+  timeBtn: { padding: "11px 0", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "rgba(255,255,255,0.6)", fontSize: 13, cursor: "pointer" },
+  timeBtnOn: { background: "rgba(56,189,248,0.2)", borderColor: "#38bdf8", color: "#fff" },
+  summaryBox: { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "16px", marginBottom: 4 },
+  sumRow: { display: "flex", justifyContent: "space-between", marginBottom: 8 },
+  payOpt: { display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.04)", border: "1px solid", borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: "#fff" },
+  payingBox: { textAlign: "center", padding: "30px 0" },
+  backBtn: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 20px", color: "rgba(255,255,255,0.6)", cursor: "pointer" },
+  pinBtn: { padding: "16px", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, color: "#fff", fontSize: 18, cursor: "pointer", fontFamily: "Syne, serif" },
+  adminCard: { background: "rgba(255,255,255,0.04)", border: "1px solid", borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", transition: "border-color 0.2s" },
+  filterBtn: { flexShrink: 0, padding: "7px 14px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, color: "rgba(255,255,255,0.5)", fontSize: 12, cursor: "pointer" },
+  filterBtnOn: { background: "rgba(56,189,248,0.2)", borderColor: "#38bdf8", color: "#38bdf8" },
+  statusBtn: { flex: 1, padding: "8px 0", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 },
+  doneCircle: { width: 80, height: 80, borderRadius: "50%", background: "linear-gradient(135deg, #059669, #10b981)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, color: "#fff", marginBottom: 20, boxShadow: "0 0 40px rgba(16,185,129,0.4)" },
+};
